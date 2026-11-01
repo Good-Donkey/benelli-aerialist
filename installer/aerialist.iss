@@ -25,6 +25,8 @@ Compression=lzma2
 SolidCompression=yes
 UninstallDisplayIcon={app}\BenelliAerialist.exe
 SetupIconFile=aerialist.ico
+; The licence page shows on a first install; updates skip it (see [Code]).
+LicenseFile=..\LICENSE
 ChangesAssociations=yes
 CloseApplications=yes
 
@@ -379,3 +381,9 @@ Root: HKA; Subkey: "Software\Classes\SystemFileAssociations\.webp\shell\BenelliA
 
 [Run]
 Filename: "{app}\BenelliAerialist.exe"; Description: "Open Benelli Aerialist now"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = wpLicense) and RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{7C1B6E52-3E0B-4C8B-9B8E-5D2B1D0BE11E}_is1');
+end;

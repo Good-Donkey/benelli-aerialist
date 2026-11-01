@@ -38,8 +38,14 @@ testing. Every line of code came from Claude; the person decided what to build a
 
 GitHub Actions builds the installer automatically on every update to `main`.
 
+## Privacy
+The app collects nothing and sends nothing. It works entirely on your PC and only goes online when you
+click a link in a PDF (it asks first) or press Check for updates, which opens the download page in your browser.
+
 ## Licence
 Benelli Aerialist is free software under the [GNU Affero General Public License v3.0](LICENSE)
 (AGPL-3.0), with no warranty. You can use, share and change it, as long as anyone you give it to can get
 the source code too. It's built on PyMuPDF, Qt for Python and other open-source parts; see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+The app is provided as is, without any warranty. Keep a copy of important PDFs before changing them.
