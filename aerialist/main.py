@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("Aerialist", "Aerialist")
         self.selftest = "--selftest" in sys.argv
         self.setWindowTitle(APP_NAME)
-        self.resize(1200, 850)
+        self.fit_to_screen()
         self.setAcceptDrops(True)
         # Tool names show on hover even when another window has the focus (Windows otherwise hides them).
         self.setAttribute(Qt.WA_AlwaysShowToolTips)
@@ -1094,6 +1094,26 @@ class MainWindow(QMainWindow):
         self.toast.show_message(f"Saved {len(files)} image(s) to {folder}")
         if sys.platform == "win32" and files:  # show the result
             subprocess.Popen(["explorer", "/select,", os.path.normpath(files[0])])
+
+    def fit_to_screen(self):
+        """Size and place the window so all of it, title bar included, is on the screen the mouse is on.
+        A fixed 1200 x 850 was taller than small or zoomed-in screens, and Windows then pushed the
+        title bar (minimise / maximise / close) off the top edge."""
+        screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        if screen is None:
+            self.resize(1200, 850)
+            return
+        area = screen.availableGeometry()  # the screen minus the taskbar
+        frame_w, frame_h = 16, 40  # room for the Windows border and title bar, outside the window's own size
+        w = min(1200, area.width() - frame_w - 40)
+        h = min(850, area.height() - frame_h - 40)
+        self.resize(max(w, 600), max(h, 400))
+        # move() places the outer frame, so the title bar's top lands inside the screen
+        x = area.left() + max(0, (area.width() - self.width() - frame_w) // 2)
+        y = area.top() + max(0, (area.height() - self.height() - frame_h) // 2)
+        self.move(x, y)
+        if area.height() < 700 or area.width() < 1000:  # small screen: just fill it
+            self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def _open_new_window(self, path):
         """Open a file just created in its own window, leaving this one as it is."""
