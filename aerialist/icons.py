@@ -64,6 +64,8 @@ PATHS = {
     "person": "M12 4a4 4 0 110 8 4 4 0 010-8zM4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6",
     "next_field": "M4 12h13M13 7l5 5-5 5M20 5v14",
     "chevron": "M7 10l5 5 5-5",
+    "chev_left": "M15 6l-6 6 6 6",
+    "chev_right": "M9 6l6 6-6 6",
     "home": "M3.5 11L12 4l8.5 7M6 9v11h4.5v-5.5h3V20H18V9",
     "textfield": "M3 7h18v10H3zM7 10v4",
     "checkbox": "M4 4h16v16H4zM8 12.5l3 3 5-6.5",
