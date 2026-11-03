@@ -16,6 +16,8 @@ FEATURES = [
     ("save", "Save and find your files", "Save, save a copy under a new name, reopen recent files, jump "
      "to a PDF's folder, and lock a PDF with a password.",
      "☰ > Save as…, Open recent, Show in File Explorer, and Password protect…"),
+    ("print", "Print", "Print to any printer, or to a PDF with Microsoft Print to PDF, including what you've "
+     "added. Choose pages and copies.", "The printer at the top left (Ctrl+P), or ☰ > Print…"),
     ("snip", "Snip", "Copy any part of a page as a sharp picture to paste into an email or document, however "
      "far you're zoomed out. You can save it as a picture too.", "The scissors at the top right (Ctrl+Shift+X)."),
     ("comment", "Comments", "Sticky notes, highlight, underline and strike through text, and replies. Other PDF "

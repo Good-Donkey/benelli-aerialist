@@ -29,7 +29,7 @@ from .textselect import Selector
 from .features import FeaturesDialog
 from .icons import icon
 from .popups import APP_NAME, ask, cant_open, choose
-from . import convert, fonts, default_app, pdfio, shell, stamps, textfix, theme, version
+from . import convert, fonts, default_app, pdfio, printing, shell, stamps, textfix, theme, version
 
 ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
 THUMB_RENDER = 240  # thumbnails are drawn once at this width and scaled for the sidebar or the Pages grid
@@ -202,6 +202,7 @@ class MainWindow(QMainWindow):
         self.act_sidebar = act("Page thumbnails", self.toggle_sidebar, "Ctrl+B")
         self.act_save = act("Save", self.save, QKeySequence.Save)
         self.act_save_as = act("Save as…", self.save_as, QKeySequence.SaveAs)
+        self.act_print = act("Print…", lambda: self.print_document(), QKeySequence.Print)
         self.act_combine = act("Merge PDFs…", self.combine_pdfs, "Ctrl+M")
         self.act_pages = act("Organize && Merge…", lambda: self.enter_pages(), "Ctrl+Shift+O")
         self.act_add_pdfs = act("Add PDFs or images…", self.add_pdfs_dialog)
@@ -252,7 +253,7 @@ class MainWindow(QMainWindow):
         self.page_actions = [self.act_rot_left, self.act_rot_right, self.act_delete, self.act_move_up,
                              self.act_move_down]
         self.doc_actions = self.page_actions + [
-            self.act_save, self.act_save_as, self.act_find, self.act_find_next, self.act_find_prev, self.act_close,
+            self.act_save, self.act_save_as, self.act_print, self.act_find, self.act_find_next, self.act_find_prev, self.act_close,
             self.act_prev, self.act_next, self.act_first, self.act_last, self.act_zoom_in, self.act_zoom_out,
             self.act_fit_width, self.act_fit_page, self.act_extract, self.act_export_images, self.act_sidebar]
 
@@ -263,6 +264,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(self.act_save)
         m.addAction(self.act_save_as)
+        m.addAction(self.act_print)
         m.addAction(self.act_show_folder)
         m.addAction(self.act_password)
         m.addSeparator()
@@ -470,6 +472,7 @@ class MainWindow(QMainWindow):
         t.comments_btn.clicked.connect(self.toggle_comments)
         t.snip_btn.clicked.connect(self.toggle_snip)
         t.save_btn.clicked.connect(self.save)
+        t.print_btn.clicked.connect(lambda: self.print_document())
         t.tab_clicked.connect(self._tab_clicked)
         t.cancel_btn.clicked.connect(self._cancel_mode)
         t.done_btn.clicked.connect(self._done_mode)
@@ -553,6 +556,7 @@ class MainWindow(QMainWindow):
         if self.mode in self.overlays:  # Ctrl+Z takes back the last change on this screen
             self.act_undo.setEnabled(self.overlays[self.mode][1].can_undo())
             self.act_redo.setEnabled(self.overlays[self.mode][1].can_redo())
+        self.top.print_btn.setEnabled(self.act_print.isEnabled())
         self.top.undo_btn.setEnabled(self.act_undo.isEnabled())
         self.top.redo_btn.setEnabled(self.act_redo.isEnabled())
         self.top.done_btn.setEnabled(has or self.mode != "pages")
@@ -1407,6 +1411,37 @@ class MainWindow(QMainWindow):
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
         return self._write(path)
+
+    def print_document(self):
+        """Print what's on screen now, including anything placed but not yet Done (that stays as it is)."""
+        if not self.doc:
+            return
+        self.setFocus()  # finishes any text being typed
+        if self.mode == "form":
+            self.prep.flush()
+        doc, copy = self.doc, None
+        if self.mode in self.overlays and self.overlays[self.mode][1].pending():
+            copy = pymupdf.open("pdf", pdfio.to_bytes(self.doc))
+            try:
+                apply_items(copy, self.overlays[self.mode][1].peek())
+            except Exception:
+                pass  # print the rest; anything that won't draw is left off
+            doc = copy
+        selected = None
+        if self.mode == "pages":
+            selected = sorted({i.row() for i in self.thumbs.selectedIndexes()} & set(range(len(doc)))) or None
+        name = os.path.splitext(os.path.basename(self.path))[0] if self.path else "Untitled"
+        try:
+            sent = printing.ask_and_print(self, doc, name, self.view.current_page(), selected)
+        except Exception as e:
+            QMessageBox.critical(self, APP_NAME, f"Couldn't print:\n{e}\n\nCheck the printer is on and "
+                                 "connected, or choose another printer.")
+            sent = 0
+        finally:
+            if copy is not None:
+                copy.close()
+        if sent:
+            self.toast.show_message(f"Sent {sent} page{'s' if sent != 1 else ''} to the printer", 3000)
 
     def _write(self, path):
         tmp = path + ".aerialist-tmp"
