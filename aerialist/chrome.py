@@ -102,7 +102,7 @@ def primary_button(text):
 
 # ---- top bar -----------------------------------------------------------------
 class TopBar(QWidget):
-    """48 px bar. Always at the left, like Word and Excel's quick access bar: menu, Save, Undo, Redo.
+    """48 px bar. Always at the left, like Word and Excel's quick access bar: menu, Save, Print, Undo, Redo.
     Main view then: file name | Read · Organize & Merge · Edit · Fill & Sign | find, more.
     Inside a mode: mode name, the mode's tools … Cancel, Done."""
     tab_clicked = Signal(str)
@@ -124,9 +124,10 @@ class TopBar(QWidget):
         self.menu_btn = tool_button("menu", tip="Menu")
         self.menu_btn.setPopupMode(QToolButton.InstantPopup)
         self.save_btn = tool_button("save", tip="Save (Ctrl+S)")
+        self.print_btn = tool_button("print", tip="Print (Ctrl+P)")
         self.undo_btn = tool_button("undo", tip="Undo (Ctrl+Z)")
         self.redo_btn = tool_button("redo", tip="Redo (Ctrl+Y)")
-        for w in (self.menu_btn, self.save_btn, self.undo_btn, self.redo_btn):
+        for w in (self.menu_btn, self.save_btn, self.print_btn, self.undo_btn, self.redo_btn):
             ll.addWidget(w)
         self.left_sep = separator()
         ll.addSpacing(8)
@@ -310,7 +311,7 @@ class TopBar(QWidget):
         self.find_btn.setVisible(has_doc)
         self.comments_btn.setVisible(has_doc)
         self.snip_btn.setVisible(has_doc)
-        for w in (self.save_btn, self.undo_btn, self.redo_btn, self.left_sep):
+        for w in (self.save_btn, self.print_btn, self.undo_btn, self.redo_btn, self.left_sep):
             w.setVisible(has_doc)
         self.logo.setVisible(not has_doc)
         QTimer.singleShot(0, self._fit)

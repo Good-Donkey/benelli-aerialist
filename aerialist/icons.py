@@ -35,6 +35,7 @@ PATHS = {
     "open": "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z",
     "recent": "M12 3a9 9 0 110 18 9 9 0 010-18zM12 7v5l3 2",
     "save": "M5 3h11l4 4v14H5zM8 3v5h7V3M8 21v-7h8v7",
+    "print": "M7 9V3.5h10V9M7 17.5H4V10h16v7.5h-3M7 14h10v6.5H7z",
     "save_copy": "M8 3h9l4 4v11H8zM5 7v14h11",
     "save_images": "M13 3H6v18h6M13 3l5 5h-5zM18 8v4M15 18h7M19 15l3 3-3 3",
     "pictures": "M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 8.5a1.2 1.2 0 110 .01",
