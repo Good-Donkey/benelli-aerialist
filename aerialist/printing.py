@@ -1,13 +1,13 @@
-"""Print: our own Print window with a preview of each sheet beside the printer, pages, copies, paper, size
-and black-and-white settings. Pages are drawn fresh from the PDF at the printer's quality (up to 300 dpi) with
-everything on them (added items, form entries, comments). Works the same with a real printer and with
+"""Print: our own Print window (not the Windows print box) with a preview of each sheet beside the printer,
+pages, copies, paper, size, two-sided and black-and-white settings. Pages are drawn fresh from the PDF at the
+printer's quality (up to 300 dpi) with everything on them (added items, form entries, comments). Works the same with a real printer and with
 Microsoft Print to PDF."""
 import re
 
 import pymupdf
 from PySide6.QtCore import QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import QColor, QImage, QPageLayout, QPageSize, QPainter, QPen
-from PySide6.QtPrintSupport import QPrintDialog, QPrinter, QPrinterInfo
+from PySide6.QtPrintSupport import QPrinter, QPrinterInfo
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
     QLineEdit, QProgressDialog, QPushButton, QRadioButton, QSizePolicy, QSpinBox, QToolButton, QVBoxLayout,
@@ -253,6 +253,14 @@ class PrintDialog(QDialog):
         self.size_box.setCurrentIndex(max(0, self.size_box.findData(self.settings.value("print/fit", "shrink"))))
         grid.addWidget(QLabel("Size"), 3, 0)
         grid.addWidget(self.size_box, 3, 1)
+
+        self.sides = QComboBox()  # only shown for printers that can print on both sides
+        for mode, label in ((QPrinter.DuplexNone, "One side"), (QPrinter.DuplexLongSide, "Both sides (flip on long edge)"),
+                            (QPrinter.DuplexShortSide, "Both sides (flip on short edge)")):
+            self.sides.addItem(label, int(mode.value))
+        self.sides_label = QLabel("Sides")
+        grid.addWidget(self.sides_label, 4, 0)
+        grid.addWidget(self.sides, 4, 1)
         grid.setColumnStretch(1, 1)
         form.addLayout(grid)
 
@@ -288,13 +296,6 @@ class PrintDialog(QDialog):
         form.addWidget(self.gray)
         form.addStretch(1)
 
-        self.more = QPushButton("Windows print settings…")
-        self.more.setToolTip("The printer's own settings, such as two-sided printing and trays")
-        self.more.setObjectName("link")
-        self.more.setCursor(Qt.PointingHandCursor)
-        self.more.clicked.connect(self._windows_settings)
-        form.addWidget(self.more, 0, Qt.AlignLeft)
-        form.addSpacing(8)
         self.sheets = QLabel()
         theme.style(self.sheets, "color: {SUBTLE};")
         form.addWidget(self.sheets)
@@ -338,6 +339,16 @@ class PrintDialog(QDialog):
                 pick = next((i for i in range(self.paper.count()) if self.paper.itemData(i).id() == default), 0)
             self.paper.setCurrentIndex(pick)
         self.paper.blockSignals(False)
+        duplex = self._printer is not None and any(
+            m in info.supportedDuplexModes() for m in (QPrinter.DuplexLongSide, QPrinter.DuplexShortSide))
+        self._duplex = duplex
+        self.sides.setVisible(duplex)
+        self.sides_label.setVisible(duplex)
+        if duplex:
+            want = int(self.settings.value(f"print/sides/{name}", 0))
+            self.sides.setCurrentIndex(max(0, self.sides.findData(want)))
+        else:
+            self.sides.setCurrentIndex(0)
         self.paper.setEnabled(self.paper.count() > 0)
         self.preview.clear()
         self._update()
@@ -351,6 +362,7 @@ class PrintDialog(QDialog):
         if isinstance(ps, QPageSize) and ps.isValid():
             pr.setPageSize(ps)
         pr.setPageOrientation(QPageLayout.Portrait)  # wide pages are turned for us, sheet by sheet
+        pr.setDuplex(QPrinter.DuplexMode(self.sides.currentData()) if self._duplex else QPrinter.DuplexNone)
         return pr
 
     def layout_for_preview(self):
@@ -385,7 +397,6 @@ class PrintDialog(QDialog):
         sheets = n * self.copies.value()
         self.sheets.setText(f"{sheets} sheet{'s' if sheets != 1 else ''} of paper" if n else "")
         self.print_btn.setEnabled(bool(n) and self._printer is not None)
-        self.more.setEnabled(self._printer is not None)
         self.preview.update()
 
     def _step(self, step):
@@ -413,6 +424,8 @@ class PrintDialog(QDialog):
         ps = self.paper.currentData()
         if isinstance(ps, QPageSize):
             self.settings.setValue(f"print/paper/{name}", ps.key())
+        if self._duplex:
+            self.settings.setValue(f"print/sides/{name}", self.sides.currentData())
 
     def _print(self):
         pr = self._configured()
@@ -423,31 +436,6 @@ class PrintDialog(QDialog):
         self.hide()
         self.sent = print_pages(self.parent(), self.doc, pr, self.pages, self.fit(), self.gray.isChecked(),
                                 self.copies.value())
-        self.accept()
-
-    def _windows_settings(self):
-        """Windows' own print box, for what only the printer knows (two-sided, trays, quality).
-        It prints from there, with the pages and copies chosen in it."""
-        pr = self._configured()
-        if pr is None:
-            return
-        pr.setCopyCount(self.copies.value())
-        pr.setFromTo(1, len(self.doc))
-        box = QPrintDialog(pr, self)
-        box.setMinMax(1, len(self.doc))
-        if box.exec() != QPrintDialog.Accepted:
-            return
-        r = pr.printRange()
-        if r == QPrinter.CurrentPage:
-            pages = [self.current]
-        elif r == QPrinter.PageRange and pr.fromPage() > 0:
-            pages = list(range(pr.fromPage() - 1, min(len(self.doc), pr.toPage() or len(self.doc))))
-        else:
-            pages = self.pages or list(range(len(self.doc)))
-        self._remember()
-        pr.setDocName(self.name)
-        self.hide()
-        self.sent = print_pages(self.parent(), self.doc, pr, pages, self.fit(), self.gray.isChecked())
         self.accept()
 
 
