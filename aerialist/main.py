@@ -226,6 +226,7 @@ class MainWindow(QMainWindow):
         self.act_comments = act("Comments", lambda: self.toggle_comments())
         self.act_snip = act("Snip", lambda: self.toggle_snip(), "Ctrl+Shift+X")
         self.act_copy = act("Copy chosen text or picture", lambda: self.selector.copy(), QKeySequence.Copy)
+        self.act_paste = act("Paste screenshot", lambda: self.paste_picture(), QKeySequence.Paste)
         self.act_features = act("What it can do…", lambda: self.show_features())
         self.act_show_folder = act("Show in File Explorer", lambda: self.show_in_folder())
         self.act_password = act("Password protect…", lambda: self.set_password())
@@ -234,7 +235,8 @@ class MainWindow(QMainWindow):
         for tool, label in (("select", "Select"), ("move", "Move"), ("text", "Text"), ("image", "Image"),
                             ("rect", "Rectangle"), ("ellipse", "Ellipse"), ("line", "Line"), ("arrow", "Arrow"),
                             ("pen", "Pen"), ("marker", "Highlighter pen"), ("highlight", "Highlight"),
-                            ("whiteout", "White-out box"), ("wpen", "White-out pen"), ("link", "Link")):
+                            ("whiteout", "White-out box"), ("wpen", "White-out pen"), ("blur", "Blur"),
+                            ("link", "Link")):
             self.tool_actions[("Edit", tool)] = act(label, lambda _=False, t=tool: self._hotkey_tool("edit", t),
                                                    group="Edit")
         for tool, label in (("signature", "Signature"), ("initials", "Initials"), ("date", "Date"),
@@ -261,6 +263,7 @@ class MainWindow(QMainWindow):
         m = QMenu(self)
         m.addAction(self.act_open)
         self.recent_menu = m.addMenu("Open recent")
+        m.addAction(self.act_paste)
         m.addSeparator()
         m.addAction(self.act_save)
         m.addAction(self.act_save_as)
@@ -551,6 +554,7 @@ class MainWindow(QMainWindow):
             a.setEnabled(has and reading)
         if self.mode == "form":  # Del deletes the selected field
             self.act_delete.setEnabled(has)
+        self.act_paste.setEnabled(self.mode in ("read", "edit"))
         for a in (self.act_combine, self.act_images_to_pdf, self.act_open, self.act_close):
             a.setEnabled(reading and (a is not self.act_close or has))
         if self.mode in self.overlays:  # Ctrl+Z takes back the last change on this screen
@@ -608,9 +612,37 @@ class MainWindow(QMainWindow):
             self.settings.setValue("last_dir", os.path.dirname(path))
             self._add_recent(path)
 
+    def paste_picture(self):
+        """Ctrl+V: a screenshot (or any picture) on the clipboard opens as a new PDF to edit, blur or
+        convert. On the Edit screen it is picked up to place on the page instead."""
+        from PySide6.QtWidgets import QApplication
+        img = QApplication.clipboard().image()
+        if img.isNull():
+            self.toast.show_message("There's no picture to paste. Take a screenshot first "
+                                    "(Windows+Shift+S), then press Ctrl+V.", 5000)
+            return
+        if self.mode == "edit":
+            self.edit_tools.paste_image(img)
+            return
+        if self.mode != "read" or not self._confirm_discard():
+            return
+        from .overlay import png_bytes
+        doc = pymupdf.open()
+        # 96 pixels to the inch, like on screen, so text added on top is the same size as the screenshot's.
+        page = doc.new_page(width=img.width() * 0.75, height=img.height() * 0.75)
+        page.insert_image(page.rect, stream=png_bytes(img))
+        self._work_n += 1
+        work = os.path.join(self.workdir, f"work{self._work_n}.pdf")
+        doc.save(work)
+        self._show(doc, None, render_path=work, dirty=True)
+        self.new_name = "Screenshot.pdf"
+        self.toast.show_message("Pasted as a new PDF. Use Edit > Blur to hide anything private, "
+                                "then Save or Convert.", 5000)
+
     def _show(self, doc, path, render_path, password=None, dirty=False):
         """Display a newly opened (or newly combined, unsaved) document."""
         self.close_document(confirm=False)
+        self.new_name = None  # what Save suggests for a new, unsaved document
         self.doc, self.path, self.password = doc, path, password
         self.save_password = password  # what the saved file will ask for (☰ > Password protect… changes it)
         self.cur_bytes = None
@@ -1402,7 +1434,8 @@ class MainWindow(QMainWindow):
         if self.path and not new:
             start = self.path
         else:
-            base = os.path.splitext(os.path.basename(self.path))[0] + " (edited).pdf" if self.path else "Merged.pdf"
+            base = os.path.splitext(os.path.basename(self.path))[0] + " (edited).pdf" if self.path else \
+                (getattr(self, "new_name", None) or "Merged.pdf")
             start = os.path.join(self._start_dir() or "", base)
         path, _ = QFileDialog.getSaveFileName(self, "Save as new PDF" if new else "Save PDF as", start,
                                               "PDF files (*.pdf)")

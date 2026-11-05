@@ -24,7 +24,7 @@ FEATURES = [
      "programs show them too.", "The speech bubble at the top right."),
     ("pages", "Organize & Merge", "Drag pages into order, rotate or delete them, add other PDFs and pictures, "
      "and save chosen pages as a new PDF.", "The Organize & Merge tab, or Merge PDFs on Home."),
-    ("edit", "Edit", "Add text, pictures, shapes, drawings, highlighter, white-out, stamps and links, and move "
+    ("edit", "Edit", "Add text, pictures, shapes, drawings, highlighter, white-out, blur, stamps and links, and move "
      "or resize what's already on the page.", "The Edit tab."),
     ("sign", "Fill & Sign", "Fill in forms, and add signatures, initials, the date and text. Save signatures "
      "for several people.", "The Fill & Sign tab, or Fill & Sign on Home."),

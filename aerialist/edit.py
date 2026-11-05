@@ -16,7 +16,7 @@ from .organizer import IMAGE_EXTS
 from .chrome import BarTools, MiniBar, tool_button, separator
 from .icons import drawn, icon, pixmap as icon_pixmap
 from . import theme
-from . import fonts, overlay
+from . import blur, fonts, overlay
 from .overlay import (Item, ImageItem, OverlaySession, to_page, read_image, jpeg_or_png, png_bytes, MARGIN,
                       SIZES, next_size, line_image)
 from .mover import ContentMover
@@ -49,6 +49,8 @@ HINTS = {
     "arrow": "Drag on the page to draw an arrow (it points to where you let go). Select or Esc to stop.",
     "highlight": "Drag over the area to highlight. The tool stays on; Select or Esc to stop.",
     "whiteout": "Drag over what you want to cover with white (then add Text on top). Select or Esc to stop.",
+    "blur": "Drag over names, numbers or faces to blur them. When you click Done, what's underneath is removed "
+            "from the PDF for good, so it can't be copied or uncovered. Select or Esc to stop.",
     "link": "Drag a box over what should be clickable, such as words already on the page, then type where it "
             "goes. To make text you add into a link, select it and click Link on its bar.",
 }
@@ -56,11 +58,11 @@ HINTS = {
 STYLE_KEYS = {"text": ("font", "size", "bold", "italic", "underline", "color"), "rect": ("color", "fill", "width"), "ellipse": ("color", "fill", "width"),
               "line": ("color", "width"), "arrow": ("color", "width"),
               "pen": ("color", "width"), "marker": ("color", "width"), "wpen": ("width",), "highlight": ("fill",), "whiteout": (),
-              "image": (), "link": ()}
+              "blur": (),              "image": (), "link": ()}
 ATTR = {"color": "color", "fill": "fill", "width": "lw", "font": "font_key", "size": "font_size",
         "bold": "bold", "italic": "italic", "underline": "underline"}  # item attribute
 WIDTHS = [0.5, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 20]
-STICKY = {"rect", "ellipse", "line", "arrow", "highlight", "whiteout"}  # stay on until Select or Esc
+STICKY = {"rect", "ellipse", "line", "arrow", "highlight", "whiteout", "blur"}  # stay on until Select or Esc
 GROUP = {"rect": "shape", "ellipse": "shape", "line": "line", "arrow": "line"}
 
 
@@ -226,7 +228,7 @@ class TextItem(Item):
 
 
 class ShapeItem(Item):
-    """Rectangle, ellipse, highlight or white-out."""
+    """Rectangle, ellipse, highlight, white-out or blur."""
 
     def __init__(self, session, label, rect, kind, style):
         self.kind = kind
@@ -253,6 +255,9 @@ class ShapeItem(Item):
             p.drawRect(box)
             p.drawPixmap(QPointF(box.right() - 18, box.top() + 2), icon_pixmap("link", 16, "ACCENT"))
             return
+        if self.kind == "blur":
+            self._draw_blur(p, box)
+            return
         z = self.zoom()
         fill = QColor(self.fill) if self.fill else None
         if fill:
@@ -264,8 +269,25 @@ class ShapeItem(Item):
         else:
             p.drawRect(box)
 
+    def _draw_blur(self, p, box):
+        """A blurred copy of the page under the box (redrawn when it moves, resizes or zooms)."""
+        scale = self.zoom() * self.devicePixelRatioF()
+        key = (tuple(self.rect_pt), round(scale, 3))
+        if getattr(self, "_blur_key", None) != key:
+            try:
+                self._blur_img = blur.render(self.session.view.doc[self.page_index], self.rect_pt, scale)
+            except Exception:
+                self._blur_img = None
+            self._blur_key = key
+        if self._blur_img is not None:
+            p.drawImage(box, self._blur_img)
+        else:
+            p.fillRect(box, QColor("#9e9e9e"))
+
     def writer(self):
         rect, kind = pymupdf.Rect(self.rect_pt), self.kind
+        if kind == "blur":
+            return lambda page: blur.write(page, rect)
         color = _rgb(self.color) if self.lw else None
         fill, width, opacity = _rgb(self.fill), self.lw, self.opacity
 
@@ -475,7 +497,7 @@ class EditSession(OverlaySession):
                        "line": {"color": "#d93025", "width": 2},
                        "pen": {"color": "#1a56db", "width": 2}, "marker": {"color": "#fbbc04", "width": 12},
                        "wpen": {"color": "#ffffff", "width": 10},
-                       "highlight": {"fill": "#fbbc04"}, "whiteout": {}, "image": {}, "link": {}}
+                       "highlight": {"fill": "#fbbc04"}, "whiteout": {}, "blur": {}, "image": {}, "link": {}}
         self._placing = None
         self.on_select = lambda item: None
         self.mover = ContentMover(self)
@@ -734,7 +756,7 @@ class EditSession(OverlaySession):
             if isinstance(item, LineItem):
                 item.set_points(item.p1, pymupdf.Point(min(item.p1.x + 100, page.width), item.p1.y))
             elif isinstance(item, ShapeItem):
-                w, h = {"highlight": (120, 16), "link": (120, 16)}.get(item.kind, (120, 60))
+                w, h = {"highlight": (120, 16), "link": (120, 16), "blur": (120, 20)}.get(item.kind, (120, 60))
                 x0, y0 = min(r.x0, page.width - w), min(r.y0, page.height - h)
                 item.rect_pt = pymupdf.Rect(x0, y0, x0 + w, y0 + h)
                 item.relayout()
@@ -913,6 +935,7 @@ TOOL_GROUPS = [  # (button key, icon, label, tools in its drop-down)
     ("link", "link", "Link", None),
     ("whiteout", "whiteout", "White-out", [("whiteout", "whiteout", "White-out box"),
                                            ("wpen", "wpen", "White-out pen")]),
+    ("blur", "blur", "Blur", None),
 ]
 
 
@@ -1113,6 +1136,17 @@ class EditTools(BarTools):
         self.session.select(None)
         self.session.set_tool(tool)
         self.tip(tool)
+
+    def paste_image(self, img):
+        """Ctrl+V with a picture on the clipboard: pick it up to place, like the Image tool."""
+        if max(img.width(), img.height()) > 3000:  # keeps the PDF a sensible size
+            img = img.scaled(3000, 3000, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.session.image = (img, png_bytes(img))
+        self.session.stamp_key = None
+        self.session.view.setFocus()
+        self.session.select(None)
+        self.session.set_tool("image")
+        self.tip("image")
 
     def _pick_stamp(self, key):
         self.session.load_stamp(key)
