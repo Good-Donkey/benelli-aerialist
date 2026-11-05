@@ -6,8 +6,9 @@ in the way of the page.
 ## What it does
 - **Read:** fast scrolling and zoom, page thumbnails, find, clickable links, copy text and pictures.
 - **Snip:** copy any part of a page as a sharp picture, or save it.
+- **Paste a screenshot:** Ctrl+V opens a picture from the clipboard as a new PDF to blur, mark up or convert.
 - **Organize & Merge:** reorder, rotate and delete pages, merge PDFs and pictures, save chosen pages as a new PDF.
-- **Edit:** add text, pictures, shapes, drawings, highlighter, white-out, stamps and links; move or resize
+- **Edit:** add text, pictures, shapes, drawings, highlighter, white-out, blur (what is under it is removed for good), stamps and links; move or resize
   what's already on the page.
 - **Fill & Sign:** fill in forms, add signatures, initials, the date and text.
 - **Comments:** sticky notes, highlight, underline and strike-through, with replies, saved as standard PDF comments.

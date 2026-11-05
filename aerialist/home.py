@@ -236,7 +236,8 @@ class HomeScreen(QScrollArea):
             b.clicked.connect(sig)
             row.addWidget(b)
         lay.addLayout(row)
-        hint = QLabel("Drag a PDF or image here to view it. Drag several to merge them.")
+        hint = QLabel("Drag a PDF or image here to view it. Drag several to merge them.\n"
+                      "Or paste a screenshot (Ctrl+V) to blur, mark up or convert it.")
         hint.setObjectName("dropHint")
         hint.setAlignment(Qt.AlignCenter)
         lay.addWidget(hint)

@@ -693,8 +693,8 @@ class OverlaySession:
 
     def peek(self):
         """The placed items as (page index, writer), left where they are (for printing them)."""
-        # White-out goes first, so it never wipes out something placed on top of it.
-        items = sorted(self.stamps, key=lambda s: getattr(s, "kind", "") not in ("whiteout", "wpen"))
+        # White-out and blur go first, so they never wipe out something placed on top of them.
+        items = sorted(self.stamps, key=lambda s: getattr(s, "kind", "") not in ("whiteout", "wpen", "blur"))
         return [(s.page_index, with_link(s.writer(), s.link, pymupdf.Rect(s.rect_pt)) if s.link else s.writer())
                 for s in items]
 
