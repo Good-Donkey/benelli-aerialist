@@ -10,7 +10,7 @@ SCALE = 2  # pixels per point in the blurred picture written into the PDF
 
 def cell_pt(rect):
     """How coarse the blur is, in points: coarser for bigger boxes, so big headings are hidden too."""
-    return max(3.5, min(9.0, min(rect.width, rect.height) / 4))
+    return max(6.0, min(16.0, min(rect.width, rect.height) / 2.5))
 
 
 def blur_image(img, cell_px):
@@ -19,7 +19,7 @@ def blur_image(img, cell_px):
     if w < 1 or h < 1:
         return img
     out = img
-    for step in (cell_px, cell_px / 2.5):
+    for step in (cell_px, cell_px / 2, cell_px / 3, cell_px / 4):
         sw, sh = max(1, round(w / max(1.0, step))), max(1, round(h / max(1.0, step)))
         out = out.scaled(sw, sh, Qt.IgnoreAspectRatio, Qt.SmoothTransformation) \
                  .scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
