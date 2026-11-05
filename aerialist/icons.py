@@ -29,7 +29,7 @@ PATHS = {
     "marker": "M4 20h16M7 15l7-10 4 3-7 10H7z",
     "highlight": "M4 20h16M7 15l7-10 4 3-7 10H7z",
     "whiteout": "M3 7h18v10H3zM7 11h10",
-    "blur": "M12 3c3 4 6.5 7.5 6.5 11a6.5 6.5 0 01-13 0C5.5 10.5 9 7 12 3zM9.5 14.5h.01M12 17.5h.01M14.5 14.5h.01",
+    "blur": "M12 4L5 20M12 4l7 16M8 14h8",  # only a stand-in: Blur's icon is painted (_blurry_a)
     "wpen": "M3 21l3.5-1L19 7.5 16.5 5 4 17.5zM14.5 7l2.5 2.5M14 21h7",
     "undo": "M8 5L4 9l4 4M4 9h11a5 5 0 010 10h-3",
     "redo": "M16 5l4 4-4 4M20 9H9a5 5 0 000 10h3",
@@ -90,7 +90,42 @@ def colour(c):
     return getattr(theme, c) if isinstance(c, str) and c.isidentifier() and c.isupper() else c
 
 
+def _blurry_a(size, color, dpr):
+    """Blur's icon: a bold letter A, blurred (drawn several times slightly offset, faintly)."""
+    import math
+    from PySide6.QtGui import QColor, QFont
+    n = int(size * dpr)
+    letter = QPixmap(n, n)
+    letter.fill(Qt.transparent)
+    p = QPainter(letter)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setRenderHint(QPainter.TextAntialiasing)
+    f = QFont()
+    f.setPixelSize(int(n * 0.9))
+    f.setBold(True)
+    p.setFont(f)
+    p.setPen(QColor(color))
+    p.drawText(QRectF(0, 0, n, n), Qt.AlignCenter, "A")
+    p.end()
+    pix = QPixmap(n, n)
+    pix.fill(Qt.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.SmoothPixmapTransform)
+    r = n * 0.075
+    for ring, alpha in ((r * 1.6, 0.22), (r, 0.3), (0, 0.45)):
+        steps = 12 if ring else 1
+        for i in range(steps):
+            a = 2 * math.pi * i / steps
+            p.setOpacity(alpha)
+            p.drawPixmap(round(ring * math.cos(a)), round(ring * math.sin(a)), letter)
+    p.end()
+    pix.setDevicePixelRatio(dpr)
+    return pix
+
+
 def pixmap(name, size=20, color="ICON", dpr=2.0, stroke=STROKE):
+    if name == "blur":
+        return _blurry_a(size, colour(color), dpr)
     pix = QPixmap(int(size * dpr), int(size * dpr))
     pix.fill(Qt.transparent)
     pix.setDevicePixelRatio(dpr)
