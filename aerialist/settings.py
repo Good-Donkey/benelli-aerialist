@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from .stamp_bar import StampSettings
-from . import comments, shell, theme, version
+from . import comments, shell, tabs, theme, version
 from .popups import ask
 
 PAGES = [("general", "General"), ("signatures", "Signatures"), ("stamps", "Toolbar & stamps"), ("keys", "Shortcuts")]
@@ -47,6 +47,19 @@ class GeneralSettings(QWidget):
             r.setChecked(choice is value)
             r.toggled.connect(lambda on, v=value: on and self._set_thumbs(v))
             self.thumbs.addButton(r)
+            lay.addWidget(r)
+
+        lay.addSpacing(10)
+        lay.addWidget(_heading("Opening files"))
+        lay.addWidget(_note("How PDFs open, from here and when you double-click them in File Explorer."))
+        self.opening = QButtonGroup(self)
+        how = str(win.settings.value(tabs.SETTING, "windows"))
+        for value, text in (("windows", "Each file in its own window"),
+                            ("tabs", "All files in one window, with tabs along the top")):
+            r = QRadioButton(text)
+            r.setChecked(how == value)
+            r.toggled.connect(lambda on, v=value: on and win.settings.setValue(tabs.SETTING, v))
+            self.opening.addButton(r)
             lay.addWidget(r)
 
         lay.addSpacing(10)

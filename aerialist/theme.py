@@ -127,6 +127,18 @@ QTabWidget::pane {{ border: 1px solid {BORDER}; border-radius: 6px; background: 
 QTabBar::tab {{ padding: 6px 14px; border: none; color: {ICON}; }}
 QTabBar::tab:selected {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }}  /* not bold: Qt cuts it off */
 
+/* tabs mode: one slim tab per open file, above the top bar */
+#docTabsBar {{ background: {CANVAS}; }}
+#docTabs::tab {{ background: transparent; color: {MUTED}; border: 1px solid transparent; border-bottom: none;
+                 border-top-left-radius: 6px; border-top-right-radius: 6px; padding: 4px 6px 5px 12px;
+                 margin-right: 2px; min-width: 60px; }}
+#docTabs::tab:hover {{ background: {HOVER}; color: {TEXT}; }}
+#docTabs::tab:selected {{ background: {SURFACE}; color: {TEXT}; border-color: {BORDER}; border-top: 2px solid {ACCENT}; }}
+#docTabClose {{ border: none; border-radius: 4px; background: transparent; }}
+#docTabClose:hover {{ background: {PRESSED}; }}
+#docTabsPlus {{ border: none; border-radius: 4px; padding: 3px; background: transparent; }}
+#docTabsPlus:hover {{ background: {HOVER}; }}
+
 /* the top bar */
 #topBar {{ background: {SURFACE}; border-bottom: 1px solid {BORDER}; }}
 #topBar QToolButton {{ border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; color: {TEXT};

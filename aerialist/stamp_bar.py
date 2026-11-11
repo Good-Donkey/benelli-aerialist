@@ -134,8 +134,10 @@ class StampGroup(QFrame):
         return act
 
     def _settings(self):
-        win = self.window()
-        if hasattr(win, "open_settings"):
+        win = self.parentWidget()
+        while win is not None and not hasattr(win, "open_settings"):  # the document this toolbar is in
+            win = win.parentWidget()
+        if win is not None:
             win.open_settings("stamps")
 
 
