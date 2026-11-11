@@ -29,7 +29,7 @@ from .textselect import Selector
 from .features import FeaturesDialog
 from .icons import icon
 from .popups import APP_NAME, ask, cant_open, choose
-from . import convert, fonts, default_app, pdfio, printing, shell, stamps, textfix, theme, version
+from . import convert, fonts, default_app, pdfio, printing, shell, stamps, tabs, textfix, theme, version
 
 ICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.png")
 THUMB_RENDER = 240  # thumbnails are drawn once at this width and scaled for the sidebar or the Pages grid
@@ -49,14 +49,20 @@ PAGES_TIP = ("Drag pages to re-order. Select pages to rotate, delete or save the
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    """One document: a window of its own, or (as it is when the app runs) a tab inside a tabs.AppWindow."""
+
+    def __init__(self, host=None):
         super().__init__()
+        self.host = host  # the AppWindow this is a tab of (None: a window of its own)
+        if host is not None:
+            self.setWindowFlags(Qt.Widget)
         self.doc = None
         self.path = None
         self.settings = QSettings("Aerialist", "Aerialist")
         self.selftest = "--selftest" in sys.argv
         self.setWindowTitle(APP_NAME)
-        self.fit_to_screen()
+        if host is None:
+            self.fit_to_screen()
         self.setAcceptDrops(True)
         # Tool names show on hover even when another window has the focus (Windows otherwise hides them).
         self.setAttribute(Qt.WA_AlwaysShowToolTips)
@@ -186,8 +192,8 @@ class MainWindow(QMainWindow):
             return a
 
         self.act_open = act("Open…", self.open_dialog, QKeySequence.Open)
-        self.act_close = act("Close", self.close_document, QKeySequence.Close)
-        self.act_quit = act("Exit", self.close, QKeySequence.Quit)
+        self.act_close = act("Close", lambda: self.close_tab(), QKeySequence.Close)
+        self.act_quit = act("Exit", lambda: self.window().close(), QKeySequence.Quit)
         self.act_prev = act("Previous page", lambda: self.view.go_to_page(self.view.current_page() - 1), "PgUp")
         self.act_next = act("Next page", lambda: self.view.go_to_page(self.view.current_page() + 1), "PgDown")
         self.act_first = act("First page", lambda: self.view.go_to_page(0), "Ctrl+Home")
@@ -304,7 +310,8 @@ class MainWindow(QMainWindow):
         """☰ > Dark/Light Mode: light, dark, or the same as Windows (the usual)."""
         self.settings.setValue("theme", mode)
         theme.set_mode(mode)
-        self.theme_actions[mode].setChecked(True)
+        for doc in tabs.all_docs():
+            doc.theme_actions[mode].setChecked(True)
         self.update()
 
     def sync_stamp_keys(self):
@@ -594,7 +601,35 @@ class MainWindow(QMainWindow):
         if self.open_dialog() and self.doc:
             self.enter_overlay("sign")
 
+    def _tabs(self):
+        """In tabs mode, the window this is a tab of (None when files open in their own windows)."""
+        return self.host if self.host is not None and tabs.tabbed() else None
+
+    def _new_tab(self):
+        """Tabs mode, when this tab already has something open: a fresh tab to start a new document in.
+        None means use this one."""
+        host = self._tabs()
+        if host is not None and (self.doc or self.mode != "read"):
+            return host.new_tab()
+        return None
+
+    def close_tab(self):
+        """Close (Ctrl+W): the tab, when there are others; otherwise the file (back to Home)."""
+        if self.host is not None and self.host.strip.count() > 1:
+            self.host.close_tab(self)
+        else:
+            self.close_document()
+
     def open_file(self, path):
+        """Open a PDF: here, or in tabs mode in its own tab (or the tab it's already in).
+        Returns the document showing it (this one or another tab), or None."""
+        host = self._tabs()
+        if host is not None:
+            return host.open_path(path, self)
+        self._open_here(path)
+        return self if self.doc and self.path == path else None
+
+    def _open_here(self, path):
         if self.mode != "read" or not self._confirm_discard():
             return
         password = None
@@ -623,6 +658,10 @@ class MainWindow(QMainWindow):
             return
         if self.mode == "edit":
             self.edit_tools.paste_image(img)
+            return
+        tab = self._new_tab()
+        if tab is not None:
+            tab.paste_picture()
             return
         if self.mode != "read" or not self._confirm_discard():
             return
@@ -1016,6 +1055,11 @@ class MainWindow(QMainWindow):
 
     def combine_pdfs(self):
         """Home's "Combine PDFs": an empty Pages screen to add files to."""
+        tab = self._new_tab()
+        if tab is not None:
+            tab.combine_pdfs()
+            self.host.drop_unused(tab)
+            return
         if self.mode != "read" or not self._confirm_discard():
             return
         self.close_document(confirm=False)
@@ -1045,9 +1089,9 @@ class MainWindow(QMainWindow):
         if dlg.choice == "word":
             self.pdf_to_word(paths[0])
             return
-        self.open_file(paths[0])
-        if self.doc and self.path == paths[0]:
-            self.export_images()
+        shown = self.open_file(paths[0])
+        if shown is not None:
+            shown.export_images()
 
     def resize_pictures(self):
         """☰ > Resize pictures: smaller copies of pictures on the PC (the same as in Explorer's right-click menu)."""
@@ -1096,6 +1140,11 @@ class MainWindow(QMainWindow):
     def images_to_pdf(self, paths=None):
         """Pictures (and other files to make into a PDF) open in Organize & Merge to put in order, then Done and
         Save."""
+        tab = self._new_tab()
+        if tab is not None:
+            tab.images_to_pdf(paths)
+            self.host.drop_unused(tab)
+            return
         if self.mode != "read" or not self._confirm_discard():
             return
         if not paths:
@@ -1152,11 +1201,12 @@ class MainWindow(QMainWindow):
             self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def _open_new_window(self, path):
-        """Open a file just created in its own window, leaving this one as it is."""
-        win = MainWindow()
-        _windows.append(win)
-        win.show()
-        win.open_file(path)
+        """Open a file just created in its own window (in tabs mode, its own tab), leaving this one as it is."""
+        host = self._tabs()
+        if host is not None:
+            host.open_path(path)
+        else:
+            tabs.new_window().current().open_file(path)
 
     def _confirm_discard(self):
         """Ask before throwing away unsaved changes. Returns False if the user cancels."""
@@ -1376,7 +1426,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, APP_NAME, f"Could not save:\n{e}")
             return
-        self.toast.show_message(f"Saved {self._n(pages)} to {os.path.basename(path)} (opened in a new window)")
+        where = "a new tab" if self._tabs() is not None else "a new window"
+        self.toast.show_message(f"Saved {self._n(pages)} to {os.path.basename(path)} (opened in {where})")
         self._open_new_window(path)
 
     def _select(self, rows):
@@ -1512,6 +1563,7 @@ class MainWindow(QMainWindow):
         self.sync_stamp_keys()
         SettingsDialog(self, page).exec()
         self.sync_stamp_keys()  # stamps added or removed there
+        tabs.settings_changed(self)
 
     def _clear_recent(self):
         self.settings.setValue("recent", [])
@@ -1799,10 +1851,20 @@ class MainWindow(QMainWindow):
             if images:
                 self.edit_session.drop_image(images[0], QCursor.pos())
         elif self.mode == "read":
+            if self._tabs() is not None and self.doc and all(p.lower().endswith(".pdf") for p in paths):
+                for p in paths:  # each in its own tab
+                    self.open_file(p)
+                return
             if any(not p.lower().endswith(".pdf") for p in paths):
                 what = "these images" if all(p.lower().endswith(IMAGE_EXTS) for p in paths) else \
                     ("this file" if len(paths) == 1 else "these files")
-                if ask(self, f"Turn {what} into a PDF?", "Make PDF") and self._confirm_discard():
+                if not ask(self, f"Turn {what} into a PDF?", "Make PDF"):
+                    return
+                tab = self._new_tab()
+                if tab is not None:
+                    tab.enter_pages()
+                    tab.insert_files(paths, 0)
+                elif self._confirm_discard():
                     self.close_document(confirm=False)
                     self.enter_pages()
                     self.insert_files(paths, 0)
@@ -1818,9 +1880,6 @@ class MainWindow(QMainWindow):
         super().resizeEvent(e)
         if self.toast.isVisible():
             self.toast.show_message(self.toast.text(), 2000)
-
-
-_windows = []  # extra windows opened for newly created files
 
 
 def _selftest(app, win):
@@ -1862,11 +1921,10 @@ def main():
             if made and sys.platform == "win32":
                 subprocess.Popen(["explorer", "/select,", os.path.normpath(made[0])])
             return
-        win = MainWindow()
         if action == "--merge":
-            win.show()
-            win.images_to_pdf(paths)
+            job = ("merge", paths, "")
         else:
+            win = MainWindow()  # (not shown: it's what the Convert questions belong to)
             to = action[len("--convert-"):] if action.startswith("--convert-") else None
             made = shell.convert_files(win, paths, to)
             pdfs = [m for m in made if m.lower().endswith(".pdf")]
@@ -1874,19 +1932,22 @@ def main():
                 if made and sys.platform == "win32":
                     subprocess.Popen(["explorer", "/select,", os.path.normpath(made[0])])
                 return
-            win.show()
-            win.open_file(pdfs[0])
-            win.toast.show_message(f"Saved {os.path.basename(pdfs[0])} next to the original" if len(made) == 1
-                                   else f"Made {len(made)} PDFs next to the originals (showing the first)", 4000)
-        sys.exit(app.exec())
-    win = MainWindow()
-    win.show()
-    win.features_after_update()
-    QTimer.singleShot(400, win.view.warm_up)  # start the page-drawing processes while Home is showing
-    if "--selftest" in sys.argv:  # used by the automated build: open a PDF, exit 0 once a page renders
-        _selftest(app, win)
-    elif len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-        win.open_file(shell.long_path(sys.argv[1]))  # supports "Open with…" / file associations
+            job = ("open", pdfs[:1], f"Saved {os.path.basename(pdfs[0])} next to the original" if len(made) == 1
+                   else f"Made {len(made)} PDFs next to the originals (showing the first)")
+    elif "--selftest" in sys.argv:
+        job = None
+    else:  # double-clicked in File Explorer, "Open with…", right-click > Open, or just started
+        job = ("open", [shell.long_path(a) for a in sys.argv[1:2] if os.path.exists(a)], "")
+    # Tabs mode: if the app is already open, its window takes the file and this copy stops here.
+    if job and tabs.tabbed() and tabs.hub.join(job[0], job[1]):
+        return
+    if job and job[1]:
+        tabs.run(*job)
+    else:
+        win = tabs.new_window().current()
+        if "--selftest" in sys.argv:  # used by the automated build: open a PDF, exit 0 once a page renders
+            _selftest(app, win)
+    tabs.latest().current().features_after_update()
     sys.exit(app.exec())
 
 

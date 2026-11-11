@@ -385,7 +385,7 @@ class ToolRow(QFrame):
         self._away.timeout.connect(self._maybe_hide)
 
     def place(self):
-        win = self.bar.window()
+        win = self.bar.parentWidget() or self.bar.window()  # the document's window (or its tab)
         if self.parent() is not win:
             self.setParent(win)
             self.hide()
@@ -428,7 +428,7 @@ class ToolRow(QFrame):
              self.rect().contains(self.mapFromGlobal(QCursor.pos())))
 
     def _check(self):
-        if not self.bar.window().isActiveWindow() and not self.isVisible():
+        if not self.bar.isVisible() or (not self.bar.window().isActiveWindow() and not self.isVisible()):
             return
         if self._near() and (self.isVisible() or QApplication.mouseButtons() == Qt.NoButton):
             if not self.isVisible():

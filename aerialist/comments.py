@@ -516,10 +516,10 @@ class CommentsPanel(QFrame):
     def pick(self, kind):
         """Pick a comment tool (None puts it down)."""
         self._cancel_pending()
-        if kind and getattr(self.window(), "snipper", None):
-            self.window().snipper.set_on(False)  # one page tool at a time
-        if kind and getattr(self.window(), "selector", None):
-            self.window().selector.clear()
+        if kind and getattr(self.win, "snipper", None):
+            self.win.snipper.set_on(False)  # one page tool at a time
+        if kind and getattr(self.win, "selector", None):
+            self.win.selector.clear()
         self.tool.kind = kind
         for k, b in self.tool_buttons.items():
             b.setChecked(k == kind)
